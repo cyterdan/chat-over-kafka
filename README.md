@@ -76,7 +76,7 @@ The app uses a direct connection to Kafka:
 ### Prerequisites
 
 - An [Aiven](https://aiven.io) account (no credit card needed)
-- Python 3 with `qrcode[pil]` module (`pip install qrcode[pil]`)
+- Python 3 with `qrcode` and `pillow` modules (`pip install qrcode pillow`)
 - Terraform
 - jq, curl (for calling the Aiven API)
 

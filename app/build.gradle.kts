@@ -21,8 +21,8 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        // Bake in the user ID from provisioning (defaults to "dev" for development)
-        val userId = project.findProperty("CHOK_USER_ID") as String? ?: "dev"
+        // Bake in the user ID from provisioning (defaults to "Bob" for development)
+        val userId = project.findProperty("CHOK_USER_ID") as String? ?: "Bob"
         buildConfigField("String", "CHOK_USER_ID", "\"$userId\"")
 
         externalNativeBuild {
