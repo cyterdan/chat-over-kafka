@@ -2,8 +2,8 @@
 
 This project is a human-scale walkie-talkie app for Android, meant for a family or a small group of friends.
 
-You only need a (free) Kafka cluster to run your own instance — no servers, no backend services — just Kafka.
-(see [installation](#installation))
+You only need a (free) Kafka cluster to run your own instance — no servers, no backend services — just Kafka
+(see [installation](#installation)).
 
 <table>
   <tr>
@@ -30,10 +30,10 @@ Chat over Kafka behaves like a traditional walkie‑talkie:
 - Hold the button to broadcast, release to send.
 - Anyone tuned to the same channel hears the message.
 - You can replay past recordings from the timeline.
-- You can add reactions to past messages
+- You can add reactions to past messages.
 
 
-## What does it have to do with kafka ?
+## What does it have to do with Kafka?
 
 Kafka is the sole backend for the application. There are no other servers, relays, or real-time gateways.
 The app relies on Kafka for:
@@ -46,8 +46,7 @@ The app relies on Kafka for:
 This started as an exploratory project to see how far you could go using Kafka alone as an application backend.
 The choice of Kafka was inspired by the Aiven competition to leverage their recent free kafka offering.
 
-## How it works
-
+## How it works?
 
 The app uses a direct connection to Kafka:
 
@@ -92,8 +91,10 @@ Note: your build machine and the Android device must be on the same local networ
 
 1. Set up a Kafka cluster (skip if you already have one).
   Get your Aiven API token from https://console.aiven.io/profile/tokens
-  Add the token to terraform.tfvars
-  Choose a geographically close cloud region (e.g. do-sfo) and configure it in terraform.tfvars
+
+Add the token to `terraform.tfvars`
+
+Choose a geographically close cloud region (e.g. do-sfo) and configure it in `terraform.tfvars`
  (see available regions [here](https://aiven.io/docs/platform/reference/list_of_clouds#digitalocean))
 
 `terraform.tfvars` should look like so
