@@ -24,6 +24,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
@@ -54,12 +55,14 @@ class AudioService(private val context: Context, private val coroutineScope: Cor
     private var audioTrack: AudioTrack? = null
     private var playbackJob: Job? = null
 
-    private val audioDispatcher = Executors.newSingleThreadExecutor().asCoroutineDispatcher()
+    private val audioExecutor = Executors.newSingleThreadExecutor()
+    private val audioDispatcher = audioExecutor.asCoroutineDispatcher()
 
     @Volatile private var pendingDecodeCount = 0
     private val pendingDecodeLock = Object()
     @Volatile private var isShuttingDown = false
     @Volatile private var decoderInitialized = false
+    @Volatile private var cleanupDone = false
     private var waveformUpdateCounter = 0
 
     private val _isRecording = MutableStateFlow(false)
@@ -159,6 +162,7 @@ class AudioService(private val context: Context, private val coroutineScope: Cor
         isShuttingDown = false
         pendingDecodeCount = 0
         decoderInitialized = false
+        cleanupDone = false
 
         playbackJob = coroutineScope.launch(Dispatchers.IO) {
             Process.setThreadPriority(Process.THREAD_PRIORITY_URGENT_AUDIO)
@@ -211,8 +215,8 @@ class AudioService(private val context: Context, private val coroutineScope: Cor
 
         coroutineScope.launch(audioDispatcher) {
             try {
-                // Double-check decoder state on the audio thread
-                if (!decoderInitialized || isShuttingDown) {
+                // Check decoder is ready (don't check isShuttingDown - let queued chunks finish)
+                if (!decoderInitialized) {
                     return@launch
                 }
 
@@ -291,7 +295,8 @@ class AudioService(private val context: Context, private val coroutineScope: Cor
     }
 
     private fun stopPlaybackInternal() {
-        if (!_isPlaying.value && !decoderInitialized) return
+        if (cleanupDone) return  // Already cleaned up
+        cleanupDone = true
 
         isShuttingDown = true
         Log.i("AudioService", "Playback stopped: $totalFramesConsumed frames")
@@ -300,16 +305,35 @@ class AudioService(private val context: Context, private val coroutineScope: Cor
         _playbackProgress.value = 0f
         expectedTotalDurationMs = 0L
         waveformUpdateCounter = 0
+
+        // Wait briefly for any pending decode operations to complete
+        synchronized(pendingDecodeLock) {
+            val startTime = System.currentTimeMillis()
+            while (pendingDecodeCount > 0 && System.currentTimeMillis() - startTime < 500) {
+                try {
+                    (pendingDecodeLock as Object).wait(100)
+                } catch (e: InterruptedException) {
+                    break
+                }
+            }
+        }
+
         audioTrack?.pause()
         audioTrack?.flush()
         audioTrack?.release()
         audioTrack = null
 
-        // Release decoder on audioDispatcher to ensure thread safety
+        // Release decoder synchronously on audio thread (bypass coroutineScope which may be cancelled)
         if (decoderInitialized) {
-            coroutineScope.launch(audioDispatcher) {
+            try {
+                val future = audioExecutor.submit {
+                    decoderInitialized = false
+                    opusDecoder.decoderRelease()
+                }
+                future.get(1000, TimeUnit.MILLISECONDS)
+            } catch (e: Exception) {
+                Log.e("AudioService", "Failed to release decoder: ${e.message}")
                 decoderInitialized = false
-                opusDecoder.decoderRelease()
             }
         }
     }
