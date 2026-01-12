@@ -1,0 +1,32 @@
+*.iml
+.gradle
+/local.properties
+/.idea/caches
+/.idea/libraries
+/.idea/modules.xml
+/.idea/workspace.xml
+/.idea/navEditor.xml
+/.idea/assetWizardSettings.xml
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+
+# Provisioning - sensitive user data
+/provisioning/users/
+/provisioning/bundles/
+/provisioning/users.json
+/provisioning/certs/
+/provisioning/*.tfstate*
+/provisioning/.terraform/
+/provisioning/mtls.json
+/provisioning/terraform.tfvars
+
+# App assets with certificates and config (per-user)
+/app/src/main/assets/*.pem
+/app/src/main/assets/*.key
+/app/src/main/assets/kafka_config.json
+/.claude/
+/provisioning/.terraform.lock.hcl
