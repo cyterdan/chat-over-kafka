@@ -5,6 +5,9 @@ This project is a human-scale walkie-talkie app for Android, meant for a family 
 You only need a (free) Kafka cluster to run your own instance — no servers, no backend services — just Kafka.
 (see [installation](#installation))
 
+![Main screen](docs/chok_main.jpg)
+![Recording screen](docs/chok_recording.jpg)
+![Timeline screen](docs/chok_timeline.jpg)
 
 ## Demo
 
