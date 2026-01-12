@@ -69,18 +69,33 @@ The app uses a direct connection to Kafka:
 - Terraform
 - jq, curl (for calling the Aiven API)
 
-### Quick Start
+### Installation
 
-1. 
-   - Get your API token from https://console.aiven.io/profile/tokens
-   - configure your token in `terraform.tfvars`
-   - choose a cloud region that is geographically close (e.g. do-sfo, see regions [here](https://aiven.io/docs/platform/reference/list_of_clouds#digitalocean) ) and configure it in `terraform.tfvars`
+Installation is handled by the provision.sh script. It uses Terraform to provision a Kafka cluster and create the required topics.
+
+Once the cluster is ready, the script can generate per-user mTLS certificates, build an APK bundled with those certificates and a username, and generate a QR code for installing the APK over the local network.
+
+Note: your build machine and the Android device must be on the same local network to use the QR code installer.
+
+
+1. Set up a Kafka cluster (skip if you already have one).
+  Get your Aiven API token from https://console.aiven.io/profile/tokens
+  Add the token to terraform.tfvars
+  Choose a geographically close cloud region (e.g. do-sfo) and configure it in terraform.tfvars
+ (see available regions [here](https://aiven.io/docs/platform/reference/list_of_clouds#digitalocean))
+
+`terraform.tfvars` should look like so
+```
+aiven_api_token = "<<YOUR TOKEN HERE>>"
+aiven_cloud_region = "do-sfo"
+```
 
 2. **Initialize infrastructure and create a user**
    ```bash
    cd provisioning
-   ./provision.sh init
-   ./provision.sh add-user alice
+   ./provision.sh init #skip if you already have a cluster
+   ./provision.sh add-user alice #this generates a certificate and builds an APK for the user
+
    ```
 
 3. **Install on your device**
@@ -91,7 +106,7 @@ The app uses a direct connection to Kafka:
 
 4. Android may show various warnings because we are installing the APK directly from a link. The APK is built locally so you can just look at the code and decide for yourself if you trust what it's doing.
 
-### Provisioning Commands
+### Provisioning script
 
 | Command | Description |
 |---------|-------------|
