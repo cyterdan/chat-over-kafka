@@ -112,6 +112,8 @@ aiven_cloud_region = "do-sfo"
    ```
 
 3. **Install on your device**
+
+(if you don't have an android device, skip this part and use the emulator on linux/macos)
    ```bash
    ./provision.sh serve
    ```

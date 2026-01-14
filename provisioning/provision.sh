@@ -12,6 +12,8 @@ set -euo pipefail
 #   ./provision.sh get-bundle <name> - Get QR code/link for existing user
 #   ./provision.sh list-users        - List all provisioned users
 #   ./provision.sh serve             - Start local webserver for APK downloads
+#   ./provision.sh setup-emulator    - Download Android emulator (no device needed)
+#   ./provision.sh run-emulator <name> - Run emulator with user's APK installed
 #   ./provision.sh help              - Show this help message
 # ============================================================================
 
@@ -21,6 +23,11 @@ USERS_DIR="$SCRIPT_DIR/users"
 BUNDLES_DIR="$SCRIPT_DIR/bundles"
 USERS_JSON="$SCRIPT_DIR/users.json"
 SERVER_PORT="${CHOK_SERVER_PORT:-8080}"
+
+# Android SDK/Emulator paths
+ANDROID_SDK_DIR="$SCRIPT_DIR/.android-sdk"
+AVD_NAME="chok-emulator"
+CMDLINE_TOOLS_VERSION="11076708"  # Latest as of 2024
 
 # Colors for output
 RED='\033[0;31m'
@@ -516,6 +523,237 @@ init_infrastructure() {
     echo ""
 }
 
+# ---------- Emulator Management ----------
+
+get_platform() {
+    local os arch
+    os="$(uname -s)"
+    arch="$(uname -m)"
+
+    case "$os" in
+        Darwin) os="mac" ;;
+        Linux)  os="linux" ;;
+        *)      fail "Unsupported OS: $os" ;;
+    esac
+
+    # For system image selection
+    case "$arch" in
+        arm64|aarch64) arch="arm64-v8a" ;;
+        x86_64)        arch="x86_64" ;;
+        *)             fail "Unsupported architecture: $arch" ;;
+    esac
+
+    echo "$os:$arch"
+}
+
+setup_emulator() {
+    log_info "Setting up Android Emulator..."
+
+    # Check for Java runtime - must actually work, not just exist (macOS has a stub)
+    local java_works=false
+
+    # First, try Android Studio's bundled JDK (most reliable on macOS)
+    local as_jdk="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
+    if [[ -d "$as_jdk" ]] && "$as_jdk/bin/java" -version >/dev/null 2>&1; then
+        log_info "Using Java from Android Studio"
+        export JAVA_HOME="$as_jdk"
+        export PATH="$JAVA_HOME/bin:$PATH"
+        java_works=true
+    # Then try system Java
+    elif java -version >/dev/null 2>&1; then
+        java_works=true
+    fi
+
+    if [[ "$java_works" != "true" ]]; then
+        echo ""
+        log_error "Java runtime not found!"
+        echo ""
+        echo "Install Java using one of these methods:"
+        echo ""
+        echo "  macOS (Homebrew):"
+        echo "    brew install openjdk"
+        echo "    sudo ln -sfn \$(brew --prefix)/opt/openjdk/libexec/openjdk.jdk /Library/Java/JavaVirtualMachines/openjdk.jdk"
+        echo ""
+        echo "  Or install Android Studio (includes Java):"
+        echo "    https://developer.android.com/studio"
+        echo ""
+        exit 1
+    fi
+
+    log_success "Java found: $(java -version 2>&1 | head -1)"
+
+    local platform_info os arch
+    platform_info=$(get_platform)
+    os="${platform_info%%:*}"
+    arch="${platform_info##*:}"
+
+    log_info "Detected platform: $os ($arch)"
+
+    mkdir -p "$ANDROID_SDK_DIR"
+
+    # Download command-line tools if not present
+    local cmdline_tools_dir="$ANDROID_SDK_DIR/cmdline-tools/latest"
+    if [[ ! -d "$cmdline_tools_dir" ]]; then
+        log_info "Downloading Android command-line tools..."
+
+        local download_url="https://dl.google.com/android/repository/commandlinetools-${os}-${CMDLINE_TOOLS_VERSION}_latest.zip"
+        local zip_file="$ANDROID_SDK_DIR/cmdline-tools.zip"
+
+        curl -L -o "$zip_file" "$download_url" || fail "Failed to download command-line tools"
+
+        log_info "Extracting command-line tools..."
+        mkdir -p "$ANDROID_SDK_DIR/cmdline-tools"
+        unzip -q "$zip_file" -d "$ANDROID_SDK_DIR/cmdline-tools/"
+        mv "$ANDROID_SDK_DIR/cmdline-tools/cmdline-tools" "$cmdline_tools_dir"
+        rm "$zip_file"
+
+        log_success "Command-line tools installed"
+    else
+        log_success "Command-line tools already installed"
+    fi
+
+    # Set up environment
+    export ANDROID_SDK_ROOT="$ANDROID_SDK_DIR"
+    export ANDROID_HOME="$ANDROID_SDK_DIR"
+    local sdkmanager="$cmdline_tools_dir/bin/sdkmanager"
+    local avdmanager="$cmdline_tools_dir/bin/avdmanager"
+
+    # Accept licenses
+    log_info "Accepting Android SDK licenses..."
+    yes | "$sdkmanager" --licenses >/dev/null 2>&1 || true
+
+    # Determine system image based on architecture
+    local system_image
+    if [[ "$arch" == "arm64-v8a" ]]; then
+        system_image="system-images;android-34;google_apis;arm64-v8a"
+    else
+        system_image="system-images;android-34;google_apis;x86_64"
+    fi
+
+    # Install required packages
+    log_info "Installing Android SDK packages (this may take a while)..."
+    "$sdkmanager" --install \
+        "platform-tools" \
+        "emulator" \
+        "platforms;android-34" \
+        "$system_image" \
+        || fail "Failed to install SDK packages"
+
+    log_success "SDK packages installed"
+
+    # Create AVD if it doesn't exist
+    local avd_dir="$HOME/.android/avd/${AVD_NAME}.avd"
+    if [[ ! -d "$avd_dir" ]]; then
+        log_info "Creating Android Virtual Device: $AVD_NAME"
+
+        echo "no" | "$avdmanager" create avd \
+            --name "$AVD_NAME" \
+            --package "$system_image" \
+            --device "pixel_6" \
+            || fail "Failed to create AVD"
+
+        # Configure AVD for better performance
+        local avd_config="$avd_dir/config.ini"
+        if [[ -f "$avd_config" ]]; then
+            echo "hw.ramSize=2048" >> "$avd_config"
+            echo "hw.keyboard=yes" >> "$avd_config"
+            echo "hw.audioInput=yes" >> "$avd_config"
+            echo "hw.audioOutput=yes" >> "$avd_config"
+        fi
+
+        log_success "AVD created: $AVD_NAME"
+    else
+        log_success "AVD already exists: $AVD_NAME"
+    fi
+
+    echo ""
+    echo -e "${GREEN}╔══════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${GREEN}║${NC}  ${CYAN}Android Emulator Setup Complete!${NC}"
+    echo -e "${GREEN}╠══════════════════════════════════════════════════════════╣${NC}"
+    echo -e "${GREEN}║${NC}  SDK Location: $ANDROID_SDK_DIR"
+    echo -e "${GREEN}║${NC}  AVD Name: $AVD_NAME"
+    echo -e "${GREEN}║${NC}"
+    echo -e "${GREEN}║${NC}  ${YELLOW}Next steps:${NC}"
+    echo -e "${GREEN}║${NC}    1. Create a user:  ./provision.sh add-user <name>"
+    echo -e "${GREEN}║${NC}    2. Run emulator:   ./provision.sh run-emulator <name>"
+    echo -e "${GREEN}╚══════════════════════════════════════════════════════════╝${NC}"
+    echo ""
+}
+
+run_emulator() {
+    local username="$1"
+    [[ -z "$username" ]] && fail "Username is required. Usage: ./provision.sh run-emulator <username>"
+
+    local apk_path="$BUNDLES_DIR/${username}.apk"
+    [[ -f "$apk_path" ]] || fail "APK not found for user '$username'. Run 'add-user $username' first."
+
+    # Check if emulator is set up
+    local emulator_bin="$ANDROID_SDK_DIR/emulator/emulator"
+    local adb_bin="$ANDROID_SDK_DIR/platform-tools/adb"
+
+    [[ -x "$emulator_bin" ]] || fail "Emulator not found. Run './provision.sh setup-emulator' first."
+    [[ -x "$adb_bin" ]] || fail "ADB not found. Run './provision.sh setup-emulator' first."
+
+    # Check if AVD exists
+    if [[ ! -d "$HOME/.android/avd/${AVD_NAME}.avd" ]]; then
+        fail "AVD '$AVD_NAME' not found. Run './provision.sh setup-emulator' first."
+    fi
+
+    export ANDROID_SDK_ROOT="$ANDROID_SDK_DIR"
+    export ANDROID_HOME="$ANDROID_SDK_DIR"
+
+    echo ""
+    echo -e "${CYAN}╔══════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${CYAN}║${NC}  ${GREEN}Starting Emulator for: $username${NC}"
+    echo -e "${CYAN}╠══════════════════════════════════════════════════════════╣${NC}"
+    echo -e "${CYAN}║${NC}  APK: $apk_path"
+    echo -e "${CYAN}║${NC}  AVD: $AVD_NAME"
+    echo -e "${CYAN}╚══════════════════════════════════════════════════════════╝${NC}"
+    echo ""
+
+    # Check if emulator is already running
+    if "$adb_bin" devices | grep -q "emulator-"; then
+        log_info "Emulator already running, installing APK..."
+    else
+        log_info "Starting emulator (this may take a minute)..."
+        "$emulator_bin" -avd "$AVD_NAME" -no-snapshot-save &
+        local emulator_pid=$!
+
+        # Wait for emulator to boot
+        log_info "Waiting for emulator to boot..."
+        local max_wait=120
+        local waited=0
+        while [[ $waited -lt $max_wait ]]; do
+            if "$adb_bin" shell getprop sys.boot_completed 2>/dev/null | grep -q "1"; then
+                break
+            fi
+            sleep 2
+            waited=$((waited + 2))
+            echo -ne "\r  Booting... ${waited}s"
+        done
+        echo ""
+
+        if [[ $waited -ge $max_wait ]]; then
+            fail "Emulator failed to boot within ${max_wait}s"
+        fi
+
+        log_success "Emulator booted successfully"
+    fi
+
+    # Install the APK
+    log_info "Installing APK..."
+    "$adb_bin" install -r "$apk_path" || fail "Failed to install APK"
+    log_success "APK installed"
+
+    # Launch the app
+    log_info "Launching Chat Over Kafka..."
+    "$adb_bin" shell am start -n "org.github.cyterdan.chat_over_kafka/.MainActivity" || log_warn "Could not auto-launch app"
+
+    echo ""
+    log_success "Done! The app should now be running in the emulator."
+    echo ""
+}
+
 show_help() {
     echo ""
     echo -e "${CYAN}Chat Over Kafka - Provisioning Tool${NC}"
@@ -523,12 +761,14 @@ show_help() {
     echo "Usage: ./provision.sh <command> [args]"
     echo ""
     echo "Commands:"
-    echo "  init              Initialize infrastructure with Terraform"
-    echo "  add-user <name>   Create new user with unique certs and build APK"
-    echo "  get-bundle <name> Show QR code and download link for existing user"
-    echo "  list-users        List all provisioned users"
-    echo "  serve             Start local HTTP server for APK downloads"
-    echo "  help              Show this help message"
+    echo "  init                  Initialize infrastructure with Terraform"
+    echo "  add-user <name>       Create new user with unique certs and build APK"
+    echo "  get-bundle <name>     Show QR code and download link for existing user"
+    echo "  list-users            List all provisioned users"
+    echo "  serve                 Start local HTTP server for APK downloads"
+    echo "  setup-emulator        Download and set up Android emulator (no device needed)"
+    echo "  run-emulator <name>   Start emulator and install user's APK"
+    echo "  help                  Show this help message"
     echo ""
     echo "Environment variables:"
     echo "  AIVEN_API_TOKEN   (required) Aiven API token"
@@ -541,6 +781,10 @@ show_help() {
     echo "  ./provision.sh add-user alice"
     echo "  ./provision.sh add-user bob"
     echo "  ./provision.sh serve"
+    echo ""
+    echo "Emulator (no Android device needed):"
+    echo "  ./provision.sh setup-emulator       # One-time setup (~2GB download)"
+    echo "  ./provision.sh run-emulator alice   # Start emulator with alice's APK"
     echo ""
 }
 
@@ -567,6 +811,12 @@ main() {
             ;;
         serve)
             serve_bundles
+            ;;
+        setup-emulator)
+            setup_emulator
+            ;;
+        run-emulator)
+            run_emulator "${2:-}"
             ;;
         help|--help|-h)
             show_help

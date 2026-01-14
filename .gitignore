@@ -30,3 +30,4 @@ local.properties
 /app/src/main/assets/kafka_config.json
 /.claude/
 /provisioning/.terraform.lock.hcl
+/provisioning/.android-sdk/
