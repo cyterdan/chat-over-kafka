@@ -130,6 +130,20 @@ aiven_cloud_region = "do-sfo"
 | `./provision.sh get-bundle <name>` | Get QR code/download link for existing user |
 | `./provision.sh list-users` | List all provisioned users |
 | `./provision.sh serve` | Start HTTP server for APK downloads |
+| `./provision.sh setup-emulator` | Download and set up Android emulator (~2GB) |
+| `./provision.sh run-emulator <name>` | Start emulator and install user's APK |
+
+### Testing without a device
+
+If you don't have an Android device, you can use the built-in emulator setup:
+
+```bash
+cd provisioning
+./provision.sh setup-emulator     # One-time setup, downloads ~2GB
+./provision.sh run-emulator alice # Start emulator with alice's APK
+```
+
+The setup downloads the Android SDK command-line tools, emulator, and a system image. Java is required (Android Studio's bundled JDK works, or install via `brew install openjdk` on macOS).
 
 ### Tooling note
 
