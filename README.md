@@ -4,6 +4,9 @@ This project is a human-scale walkie-talkie app for Android, meant for a family 
 
 You only need a (free) Kafka cluster to run your own instance — no servers, no backend services — just Kafka
 (see [installation](#installation)).
+
+![Architecture diagram](docs/architecture.svg)
+
 ## Demo
 https://github.com/user-attachments/assets/f8fb07e4-c3d4-4df5-bc0e-aac8818b281b
 
