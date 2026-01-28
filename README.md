@@ -20,9 +20,7 @@ You only need a (free) Kafka cluster to run your own instance — no servers, no
 </table>
 ## Demo
 
-```
-[ Demo video placeholder ]
-```
+<video src="chat_over_kafka_demo.mp4" controls width="600"></video>
 
 ## What the app does
 
