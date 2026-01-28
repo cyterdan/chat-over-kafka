@@ -21,6 +21,7 @@ https://github.com/user-attachments/assets/f8fb07e4-c3d4-4df5-bc0e-aac8818b281b
     </td>
   </tr>
 </table>
+
 ## What the app does
 
 Chat over Kafka behaves like a traditional walkie‑talkie:
