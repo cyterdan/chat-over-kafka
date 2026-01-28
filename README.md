@@ -4,7 +4,11 @@ This project is a human-scale walkie-talkie app for Android, meant for a family 
 
 You only need a (free) Kafka cluster to run your own instance — no servers, no backend services — just Kafka
 (see [installation](#installation)).
+## Demo
 
+<video src="docs/chat_over_kafka_demo.mp4" controls width="600"></video>
+
+## screenshots
 <table>
   <tr>
     <td align="center">
@@ -18,10 +22,6 @@ You only need a (free) Kafka cluster to run your own instance — no servers, no
     </td>
   </tr>
 </table>
-## Demo
-
-<video src="docs/chat_over_kafka_demo.mp4" controls width="600"></video>
-
 ## What the app does
 
 Chat over Kafka behaves like a traditional walkie‑talkie:
